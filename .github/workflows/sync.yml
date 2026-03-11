@@ -1,0 +1,33 @@
+name: ARENAS Sync
+
+on:
+  schedule:
+    # Every 5 minutes, 9h-23h55 UTC (= ~11h-01h55 heure de Paris en été, ~10h-00h55 en hiver)
+    - cron: '*/5 9-23 * * *'
+  workflow_dispatch: # Permet de lancer manuellement depuis GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync Football
+        env:
+          API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node sync-matches.js
+
+      - name: Sync Rugby
+        env:
+          API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node sync-rugby.js
