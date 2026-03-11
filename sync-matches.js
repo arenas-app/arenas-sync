@@ -173,6 +173,29 @@ async function syncLineups() {
   }
 }
 
+async function syncLive() {
+  console.log('\n🔴 Sync des matchs en direct...');
+
+  const leagueIds = LEAGUES.map(l => l.id).join('-');
+  const live = await apiFootball(`/fixtures?live=${leagueIds}`);
+
+  if (live.length === 0) {
+    console.log('  Aucun match en direct');
+    return;
+  }
+
+  for (const f of live) {
+    const league = LEAGUES.find(l => l.id === f.league?.id);
+    if (!league) continue;
+
+    const match = formatMatch(f, league);
+    const ok = await supabaseUpsert([match]);
+    if (ok) {
+      console.log(`  🔴 ${match.home_team} ${match.home_score}-${match.away_score} ${match.away_team} (${match.status})`);
+    }
+  }
+}
+
 async function main() {
   console.log('🏟️  ARENAS — Sync des matchs\n');
   console.log(`📅 ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR')}`);
@@ -182,6 +205,7 @@ async function main() {
     total += await syncLeague(league);
   }
 
+  await syncLive();
   await syncEvents();
   await syncLineups();
 
