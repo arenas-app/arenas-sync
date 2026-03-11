@@ -221,11 +221,40 @@ async function syncLeague(league) {
   return matches.length;
 }
 
+async function syncLive() {
+  console.log('\n🔴 Sync des matchs rugby en direct...');
+
+  const live = await apiRugby('/games?live=all');
+
+  if (live.length === 0) {
+    console.log('  Aucun match en direct');
+    return;
+  }
+
+  for (const game of live) {
+    const league = LEAGUES.find(l => l.id === game.league?.id);
+    if (!league) continue;
+
+    const match = formatRugbyMatch(game, league);
+
+    // Apply filters (french clubs only for European cups, etc.)
+    const filtered = filterMatches([match], league.filter);
+    if (filtered.length === 0) continue;
+
+    const ok = await supabaseUpsert([match]);
+    if (ok) {
+      console.log(`  🔴 ${match.home_team} ${match.home_score}-${match.away_score} ${match.away_team} (${match.status})`);
+    }
+  }
+}
+
 async function main() {
   console.log('🏉 ARENAS — Sync des matchs rugby\n');
   console.log(`📅 ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR')}`);
 
   await collectFrenchClubs();
+
+  await syncLive();
 
   let total = 0;
   for (const league of LEAGUES) {
