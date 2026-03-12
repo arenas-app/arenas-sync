@@ -8,12 +8,21 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const LEAGUES = [
+  // France
   { id: 61, name: 'Ligue 1', sport: 'football', emoji: '⚽' },
   { id: 62, name: 'Ligue 2', sport: 'football', emoji: '⚽' },
   { id: 63, name: 'National 1', sport: 'football', emoji: '⚽' },
+  { id: 66, name: 'Coupe de France', sport: 'football', emoji: '⚽' },
+  { id: 64, name: 'Feminine Division 1', sport: 'football', emoji: '⚽' },
+  // Coupes d'Europe
   { id: 2, name: 'Champions League', sport: 'football', emoji: '⚽' },
   { id: 3, name: 'Europa League', sport: 'football', emoji: '⚽' },
   { id: 848, name: 'Conference League', sport: 'football', emoji: '⚽' },
+  // Andorre
+  { id: 312, name: '1a Divisió', sport: 'football', emoji: '⚽' },
+  { id: 313, name: '2a Divisió', sport: 'football', emoji: '⚽' },
+  { id: 655, name: 'Copa Constitució', sport: 'football', emoji: '⚽' },
+  { id: 809, name: 'Super Cup', sport: 'football', emoji: '⚽' },
 ];
 const SEASON = 2025;
 
@@ -86,7 +95,7 @@ async function syncLeague(league) {
   console.log(`\n🏆 ${league.name} (id: ${league.id})`);
 
   console.log('  📅 Prochains matchs...');
-  const next = await apiFootball(`/fixtures?league=${league.id}&season=${SEASON}&next=20`);
+  const next = await apiFootball(`/fixtures?league=${league.id}&season=${SEASON}&next=80`);
   console.log(`${next.length} trouvés`);
 
   console.log('  📊 Derniers résultats...');
@@ -111,35 +120,33 @@ async function syncLeague(league) {
 }
 
 async function syncEvents() {
-  console.log('\n⚽ Sync des événements (derniers matchs terminés)...');
+  console.log('\n⚽ Sync des événements (matchs terminés sans events)...');
 
-  for (const league of LEAGUES) {
-    const finished = await apiFootball(`/fixtures?league=${league.id}&season=${SEASON}&last=5`);
+  // Only fetch events for matches that don't have them yet
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/matches?status=eq.FT&events=is.null&sport=eq.football&select=id,api_id,home_team,away_team&limit=10&order=match_date.desc`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  const needEvents = await res.json();
+  if (!needEvents || needEvents.length === 0) { console.log('  Aucun match à enrichir'); return; }
 
-    for (const f of finished) {
-      if (f.fixture.status.short !== 'FT') continue;
-      const fid = f.fixture.id;
+  console.log(`  ${needEvents.length} matchs à enrichir`);
+  for (const m of needEvents) {
+    const events = await apiFootball(`/fixtures/events?fixture=${m.api_id}`);
+    const stats = await apiFootball(`/fixtures/statistics?fixture=${m.api_id}`);
 
-      const events = await apiFootball(`/fixtures/events?fixture=${fid}`);
-      const stats = await apiFootball(`/fixtures/statistics?fixture=${fid}`);
-
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/matches?api_id=eq.${fid}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-        },
-        body: JSON.stringify({
-          events: events || [],
-          statistics: stats || [],
-        })
-      });
-
-      if (res.ok) {
-        console.log(`  ✅ ${f.teams.home.name} vs ${f.teams.away.name}`);
-      }
-    }
+    await fetch(`${SUPABASE_URL}/rest/v1/matches?id=eq.${m.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({
+        events: events.length > 0 ? events : [],
+        statistics: stats.length > 0 ? stats : [],
+      })
+    });
+    console.log(`  ✅ ${m.home_team} vs ${m.away_team}`);
   }
 }
 
